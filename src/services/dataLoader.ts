@@ -18,17 +18,17 @@ export interface TrainDataset {
 
 // --- API Fetch Functions ---
 const fetchTrains = async (): Promise<ApiEnvelope<TrainSummary[]>> => {
-  const response = await fetch(`${process.env.VITE_PUBLIC_SOCKET_URL}/api/trains`);
+  const response = await fetch(`${import.meta.env.VITE_PUBLIC_SOCKET_URL}/api/trains`);
   return response.json();
 };
 
 const fetchStations = async (): Promise<ApiEnvelope<StationDetails[]>> => {
-  const response = await fetch(`${process.env.VITE_PUBLIC_SOCKET_URL}/api/stations`);
+  const response = await fetch(`${import.meta.env.VITE_PUBLIC_SOCKET_URL}/api/stations`);
   return response.json();
 };
 
 const fetchTrainStations = async (): Promise<TrainStationsMapEntry[]> => {
-  const response = await fetch(`${process.env.VITE_PUBLIC_SOCKET_URL}/api/train-stations`);
+  const response = await fetch(`${import.meta.env.VITE_PUBLIC_SOCKET_URL}/api/train-stations`);
   return response.json();
 };
 

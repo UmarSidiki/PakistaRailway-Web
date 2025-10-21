@@ -1,7 +1,7 @@
 import type { LiveTrainDelta, SocketMessageEnvelope, SocketTrainPayload, TrainWithRoute } from '@/types';
 import { findStopByStationId } from './dataLoader';
 
-export const SOCKET_URL = process.env.VITE_PUBLIC_SOCKET_URL as string;
+export const SOCKET_URL = import.meta.env.VITE_PUBLIC_SOCKET_URL as string;
 
 export const SOCKET_OPTIONS = {
   path: '/socket.io',
