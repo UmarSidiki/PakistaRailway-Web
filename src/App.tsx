@@ -5,7 +5,6 @@ import { FiltersBar } from "@/components/FiltersBar";
 import { TrainList } from "@/components/TrainList";
 import { TrainDetails } from "@/components/TrainDetails";
 import { MapView } from "@/components/MapView";
-import { StatsOverview } from "@/components/StatsOverview";
 import { StationUpdates } from "@/components/StationUpdates";
 import { StationSchedule } from "@/components/StationSchedule";
 import {
@@ -75,14 +74,8 @@ const App = () => {
       <main className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-6 px-3 py-6 pb-36 sm:px-6 lg:px-8">
         {activeTab === "search" ? (
           <section className="flex flex-1 flex-col gap-6">
-            <StatsOverview
-              trains={trains}
-              liveCount={liveCount}
-              unresolvedCount={unresolvedCount}
-            />
-
             <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,320px),1fr] lg:items-start">
-              <div className="flex flex-col gap-4 lg:sticky lg:top-28">
+              <div className="flex flex-col gap-4 lg:sticky lg:top-4 lg:self-start">
                 <FiltersBar filters={filters} onChange={setFilters} />
 
                 <aside className="hidden rounded-3xl border border-[color:var(--stroke)] bg-[#fff5e6]/80 p-6 shadow-[0_24px_45px_-35px_rgba(95,75,60,0.55)] backdrop-blur sm:block">
