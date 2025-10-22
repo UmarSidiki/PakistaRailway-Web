@@ -5,8 +5,9 @@ import { StationDetails, TrainWithRoute, LiveTrainDelta } from '@/types';
 export class AppDB extends Dexie {
   trains!: Table<TrainWithRoute, number>;
   stations!: Table<StationDetails, number>;
-  liveDeltas!: Table<LiveTrainDelta, string>; // New table for live deltas
+  liveDeltas!: Table<LiveTrainDelta, string>;
   lastUpdated!: Table<{ name: string; timestamp: number }, string>;
+  tracks!: Table<any, number>; // Track data by TrainId
 
   constructor() {
     super('PakRailDB');
@@ -24,6 +25,15 @@ export class AppDB extends Dexie {
       stations: 'StationDetailsId, StationName',
       lastUpdated: 'name',
       liveDeltas: 'id, trainKey, lastUpdated, trainNumber',
+    });
+
+    // Version 3: Add the tracks table
+    this.version(3).stores({
+      trains: 'TrainId, TrainNumber, TrainName, IsUp, IsLive',
+      stations: 'StationDetailsId, StationName',
+      lastUpdated: 'name',
+      liveDeltas: 'id, trainKey, lastUpdated, trainNumber',
+      tracks: 'TrainId'
     });
 
     // Handle database events

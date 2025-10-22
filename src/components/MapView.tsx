@@ -16,6 +16,10 @@ import type {
 import L from "leaflet";
 import type { TrainWithRoute } from "@/types";
 import { getTrainUniqueKey } from "@/lib/train";
+import { db } from "@/services/db";
+import { TrackPolyline } from "./TrackPolyline";
+import { getCachedTrack, setCachedTrack } from "@/services/trackCache";
+import { fetchTrackData } from "@/services/trackApi";
 import {
   formatLateBy,
   formatRelativeTime,
@@ -110,13 +114,109 @@ export const MapView = ({
       ] as LatLngExpression)
     : undefined;
 
+  // --- Real Track Data State ---
+  const [trackPoints, setTrackPoints] = useState<[number, number][]>([]);
+  const [trackLoading, setTrackLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedTrain?.TrainId) {
+      setTrackPoints([]);
+      return;
+    }
+    setTrackLoading(true);
+
+    // Try IndexedDB first using utility
+    getCachedTrack(selectedTrain.TrainId)
+      .then((cached) => {
+        if (cancelled) return;
+        if (cached && Array.isArray(cached.stations)) {
+          const points: [number, number][] = [];
+          cached.stations.forEach((station: any) => {
+            if (Array.isArray(station.trackGeometryToNext)) {
+              station.trackGeometryToNext.forEach((pt: any) => {
+                if (
+                  Array.isArray(pt) &&
+                  pt.length === 2 &&
+                  typeof pt[0] === "number" &&
+                  typeof pt[1] === "number"
+                ) {
+                  points.push([pt[0], pt[1]]);
+                }
+              });
+            }
+          });
+          setTrackPoints(points);
+          setTrackLoading(false);
+          return;
+        }
+        // Not cached, fetch from API
+        fetchTrackData(selectedTrain.TrainId)
+          .then((data) => {
+            if (cancelled) return;
+            setCachedTrack(selectedTrain.TrainId, data);
+            const points: [number, number][] = [];
+            if (Array.isArray(data.stations)) {
+              data.stations.forEach((station: any) => {
+                if (Array.isArray(station.trackGeometryToNext)) {
+                  station.trackGeometryToNext.forEach((pt: any) => {
+                    if (
+                      Array.isArray(pt) &&
+                      pt.length === 2 &&
+                      typeof pt[0] === "number" &&
+                      typeof pt[1] === "number"
+                    ) {
+                      points.push([pt[0], pt[1]]);
+                    }
+                  });
+                }
+              });
+            }
+            setTrackPoints(points);
+          })
+          .catch(() => setTrackPoints([]))
+          .finally(() => setTrackLoading(false));
+      });
+    return () => { cancelled = true; };
+  }, [selectedTrain?.TrainId]);
+
+  // Fallback to old route if no track data
   const routePoints = useMemo(
     () =>
-      selectedTrain?.route.map(
-        (stop) => [stop.Latitude, stop.Longitude] as [number, number]
-      ) ?? [],
-    [selectedTrain]
+      trackPoints.length > 1
+        ? trackPoints
+        : selectedTrain?.route.map(
+            (stop) => [stop.Latitude, stop.Longitude] as [number, number]
+          ) ?? [],
+    [trackPoints, selectedTrain]
   );
+
+  // Split track into passed and remaining segments
+  const [passedTrackPoints, remainingTrackPoints] = useMemo(() => {
+    if (
+      !selectedTrain?.livePosition ||
+      !routePoints.length
+    ) {
+      return [[], []];
+    }
+    // Find closest point on track to live position
+    const { lat, lon } = selectedTrain.livePosition;
+    let minIdx = 0;
+    let minDist = Number.POSITIVE_INFINITY;
+    routePoints.forEach(([ptLat, ptLon], idx) => {
+      const d = Math.hypot(ptLat - lat, ptLon - lon);
+      if (d < minDist) {
+        minDist = d;
+        minIdx = idx;
+      }
+    });
+    // Passed: up to and including closest point
+    // Remaining: from closest point to end
+    return [
+      routePoints.slice(0, minIdx + 1),
+      routePoints.slice(minIdx)
+    ];
+  }, [selectedTrain?.livePosition, routePoints]);
 
   const routeStations = useMemo(() => {
     if (!selectedTrain?.route) return [];
@@ -362,32 +462,10 @@ export const MapView = ({
           opacity={0.65}
         />
 
-        {completedRoute.length > 1 && (
-          <Polyline
-            positions={completedRoute}
-            pathOptions={{
-              color: "#1e40af",
-              weight: 5,
-              opacity: 0.8,
-              lineCap: "round",
-              lineJoin: "round",
-            }}
-          />
-        )}
-
-        {remainingRoute.length > 1 && (
-          <Polyline
-            positions={remainingRoute}
-            pathOptions={{
-              color: "#60a5fa",
-              weight: 4,
-              opacity: 0.7,
-              dashArray: "12, 8",
-              lineCap: "round",
-              lineJoin: "round",
-            }}
-          />
-        )}
+        <TrackPolyline
+          routePoints={routePoints}
+          livePosition={selectedTrain?.livePosition ?? null}
+        />
 
         {routeStations.map((station) => {
           // Calculate distance and expected arrival if train is live

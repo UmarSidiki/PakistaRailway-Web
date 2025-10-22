@@ -1,5 +1,6 @@
 // socket.ts
-import io, { Socket } from 'socket.io-client';
+import io from 'socket.io-client';
+import type { Socket as IOSocket } from 'socket.io-client';
 import type { SocketMessageEnvelope } from '@/types';
 import { SOCKET_OPTIONS, SOCKET_URL, flattenSocketEnvelope } from './liveData';
 
@@ -13,48 +14,45 @@ export type SocketEvents = {
   onError?: (error: Error) => void;
 };
 
+let singletonSocket: typeof import("socket.io-client").Socket | null = null;
+let handlerRefs: Set<DeltaHandler> = new Set();
+
 export const connectLiveSocket = (handler: DeltaHandler, events?: SocketEvents): (() => void) => {
-  // FIX 1: Let TypeScript infer the socket's type. This is safer and avoids naming conflicts.
-  // FIX 2: Create a new options object and spread the readonly 'transports' array
-  // to create a mutable copy that socket.io can accept.
-  const socket = io(SOCKET_URL, {
-    ...SOCKET_OPTIONS,
-    transports: [...SOCKET_OPTIONS.transports]
-  });
+  if (!singletonSocket) {
+    singletonSocket = io(SOCKET_URL, {
+      ...SOCKET_OPTIONS,
+      transports: [...SOCKET_OPTIONS.transports]
+    });
 
-  const handleEnvelope = (payload: SocketMessageEnvelope) => {
-    const deltas = flattenSocketEnvelope(payload);
-    if (deltas.length > 0) {
-      handler(deltas);
-    }
-  };
+    // Register event listeners once
+    singletonSocket.on('connect', events?.onConnect ?? (() => {}));
+    singletonSocket.on('disconnect', events?.onDisconnect ?? (() => {}));
+    singletonSocket.on('connect_error', events?.onError ?? (() => {}));
+    singletonSocket.on('error', events?.onError ?? (() => {}));
+    singletonSocket.io.on('reconnect_attempt', events?.onReconnectAttempt ?? (() => {}));
+    singletonSocket.io.on('reconnect', events?.onReconnect ?? (() => {}));
 
-  // Register event listeners, providing a no-op function as a fallback
-  socket.on('connect', events?.onConnect ?? (() => {}));
-  socket.on('disconnect', events?.onDisconnect ?? (() => {}));
-  socket.on('connect_error', events?.onError ?? (() => {}));
-  socket.on('error', events?.onError ?? (() => {}));
-  socket.io.on('reconnect_attempt', events?.onReconnectAttempt ?? (() => {}));
-  socket.io.on('reconnect', events?.onReconnect ?? (() => {}));
+    // Data listeners call all registered handlers
+    const handleEnvelope = (payload: SocketMessageEnvelope) => {
+      const deltas = flattenSocketEnvelope(payload);
+      if (deltas.length > 0) {
+        handlerRefs.forEach(fn => fn(deltas));
+      }
+    };
+    singletonSocket.on('all-newtrains-delta', handleEnvelope);
+    singletonSocket.on('all-newtrains', handleEnvelope);
+    singletonSocket.on('all-trains-delta', handleEnvelope);
+  }
 
-  // Register data listeners
-  socket.on('all-newtrains-delta', handleEnvelope);
-  socket.on('all-newtrains', handleEnvelope);
-  socket.on('all-trains-delta', handleEnvelope);
+  handlerRefs.add(handler);
 
   // Return a cleanup function
   return () => {
-    // Also use the fallback when removing listeners
-    socket.off('connect', events?.onConnect ?? (() => {}));
-    socket.off('disconnect', events?.onDisconnect ?? (() => {}));
-    socket.off('connect_error', events?.onError ?? (() => {}));
-    socket.off('error', events?.onError ?? (() => {}));
-    socket.io.off('reconnect_attempt', events?.onReconnectAttempt ?? (() => {}));
-    socket.io.off('reconnect', events?.onReconnect ?? (() => {}));
-
-    socket.off('all-newtrains-delta', handleEnvelope);
-    socket.off('all-newtrains', handleEnvelope);
-    socket.off('all-trains-delta', handleEnvelope);
-    socket.disconnect();
+    handlerRefs.delete(handler);
+    // Optionally disconnect if no handlers remain
+    if (handlerRefs.size === 0 && singletonSocket) {
+      singletonSocket.disconnect();
+      singletonSocket = null;
+    }
   };
 };
