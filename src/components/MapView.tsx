@@ -15,6 +15,7 @@ import type {
 } from "leaflet";
 import L from "leaflet";
 import type { TrainWithRoute } from "@/types";
+import { getTrainUniqueKey } from "@/lib/train";
 import {
   formatLateBy,
   formatRelativeTime,
@@ -31,6 +32,7 @@ interface MapViewProps {
     number,
     { StationName: string; Latitude: number; Longitude: number }
   >;
+  relatedTrains?: TrainWithRoute[];
 }
 
 const DEFAULT_CENTER: LatLngExpression = [30.3753, 69.3451];
@@ -75,25 +77,31 @@ export const MapView = ({
   trains,
   selectedTrain,
   stationLookup,
+  relatedTrains = [],
 }: MapViewProps) => {
   const selectedLiveTrain = selectedTrain?.livePosition
     ? selectedTrain
     : undefined;
-  const displayedTrains = useMemo(
-    () => (selectedLiveTrain ? [selectedLiveTrain] : []),
-    [selectedLiveTrain]
+  const relatedTrainsWithPosition = useMemo(
+    () => relatedTrains.map((train) => {
+      const position = train.livePosition
+        ? ([train.livePosition.lat, train.livePosition.lon] as [number, number])
+        : train.upcomingStop
+        ? ([train.upcomingStop.Latitude, train.upcomingStop.Longitude] as [number, number])
+        : train.route[0]
+        ? ([train.route[0].Latitude, train.route[0].Longitude] as [number, number])
+        : undefined;
+      return { train, position, isLive: Boolean(train.livePosition) };
+    }).filter(({ position }) => position !== undefined),
+    [relatedTrains]
   );
-  const hasAnyLiveTrain = useMemo(
-    () => trains.some((train) => Boolean(train.livePosition)),
-    [trains]
+  const displayedItems = useMemo(
+    () => (selectedLiveTrain ? [{ train: selectedLiveTrain, position: [selectedLiveTrain.livePosition!.lat, selectedLiveTrain.livePosition!.lon] as [number, number], isLive: true }, ...relatedTrainsWithPosition] : relatedTrainsWithPosition),
+    [selectedLiveTrain, relatedTrainsWithPosition]
   );
   const displayedPoints = useMemo(
-    () =>
-      displayedTrains.map(
-        (train) =>
-          [train.livePosition!.lat, train.livePosition!.lon] as [number, number]
-      ),
-    [displayedTrains]
+    () => displayedItems.map(({ position }) => position) as [number, number][],
+    [displayedItems]
   );
   const selectedPosition = selectedLiveTrain
     ? ([
@@ -472,71 +480,93 @@ export const MapView = ({
           );
         })}
 
-        {displayedTrains.map((train: TrainWithRoute) => {
-          const live = train.livePosition!;
-          const isSelected = selectedLiveTrain?.TrainId === train.TrainId;
-          const iconKey = `${train.TrainId}-${
-            isSelected ? "selected" : train.IsUp ? "up" : "down"
-          }`;
-          const icon = getIcon(
-            iconKey,
-            isSelected
-              ? "rgba(16,185,129,0.95)"
-              : train.IsUp
-              ? "rgba(14,165,233,0.9)"
-              : "rgba(249,115,22,0.9)",
-            isSelected ? "#10b981" : "#ffffff"
-          );
+        {displayedItems.map(({ train, position, isLive }) => {
+           const isSelected = selectedLiveTrain && getTrainUniqueKey(selectedLiveTrain) === getTrainUniqueKey(train);
+           const isRelated = !isSelected && relatedTrains.includes(train);
+           const iconKey = `${getTrainUniqueKey(train)}-${isSelected ? "selected" : isRelated ? "related" : train.IsUp ? "up" : "down"}`;
+           const icon = getIcon(
+             iconKey,
+             isSelected
+               ? "rgba(16,185,129,0.95)"
+               : isRelated
+               ? "rgba(139,69,19,0.9)" // brown for related
+               : train.IsUp
+               ? "rgba(14,165,233,0.9)"
+               : "rgba(249,115,22,0.9)",
+             isSelected ? "#10b981" : isRelated ? "#8b4513" : "#ffffff"
+           );
 
-          return (
-            <Marker
-              key={train.TrainId}
-              position={[live.lat, live.lon]}
-              icon={icon}
-              zIndexOffset={isSelected ? 1000 : 0}
-            >
-              <Popup closeButton={false} className="train-popup" maxWidth={220}>
-                <div className="space-y-1.5 p-1">
-                  <div>
-                    <div className="font-semibold text-neutral-900 text-sm leading-tight">
-                      {train.TrainName}
-                    </div>
-                    {train.TrainDescription && (
-                      <div className="text-xs text-neutral-600 leading-tight">
-                        {train.TrainDescription}
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-0.5 text-xs text-neutral-700">
-                    <div className="flex justify-between gap-2">
-                      <span className="text-neutral-500">Next stop:</span>
-                      <span className="font-medium text-right">
-                        {train.upcomingStop?.StationName ??
-                          live.nextStopName ??
-                          "—"}
-                      </span>
-                    </div>
-                    <div className="flex justify-between gap-2">
-                      <span className="text-neutral-500">Speed:</span>
-                      <span className="font-medium">
-                        {formatSpeed(live.speed)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between gap-2">
-                      <span className="text-neutral-500">Delay:</span>
-                      <span className="font-medium">
-                        {formatLateBy(live.lateBy)}
-                      </span>
-                    </div>
-                    <div className="text-[10px] text-neutral-400 pt-1 border-t border-neutral-200">
-                      Updated {formatRelativeTime(live.lastUpdated)}
-                    </div>
-                  </div>
-                </div>
-              </Popup>
-            </Marker>
-          );
-        })}
+           return (
+             <Marker
+               key={getTrainUniqueKey(train)}
+               position={position as LatLngExpression}
+               icon={icon}
+               zIndexOffset={isSelected ? 1000 : 0}
+             >
+               <Popup closeButton={false} className="train-popup" maxWidth={220}>
+                 <div className="space-y-1.5 p-1">
+                   <div>
+                     <div className="font-semibold text-neutral-900 text-sm leading-tight">
+                       {train.TrainName}
+                     </div>
+                     {train.TrainDescription && (
+                       <div className="text-xs text-neutral-600 leading-tight">
+                         {train.TrainDescription}
+                       </div>
+                     )}
+                     {isRelated && train.AllocatedDate && (
+                       <div className="text-xs text-amber-700 leading-tight">
+                         Date: {(() => {
+                           const date = new Date(train.AllocatedDate);
+                           const today = new Date();
+                           const yesterday = new Date(today);
+                           yesterday.setDate(today.getDate() - 1);
+                           if (date.toDateString() === today.toDateString()) return "Today";
+                           if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+                           return date.toLocaleDateString();
+                         })()}
+                       </div>
+                     )}
+                   </div>
+                   <div className="space-y-0.5 text-xs text-neutral-700">
+                     <div className="flex justify-between gap-2">
+                       <span className="text-neutral-500">Next stop:</span>
+                       <span className="font-medium text-right">
+                         {train.upcomingStop?.StationName ??
+                           (isLive ? train.livePosition!.nextStopName : null) ??
+                           "—"}
+                       </span>
+                     </div>
+                     {isLive && (
+                       <>
+                         <div className="flex justify-between gap-2">
+                           <span className="text-neutral-500">Speed:</span>
+                           <span className="font-medium">
+                             {formatSpeed(train.livePosition!.speed)}
+                           </span>
+                         </div>
+                         <div className="flex justify-between gap-2">
+                           <span className="text-neutral-500">Delay:</span>
+                           <span className="font-medium">
+                             {formatLateBy(train.livePosition!.lateBy)}
+                           </span>
+                         </div>
+                         <div className="text-[10px] text-neutral-400 pt-1 border-t border-neutral-200">
+                           Updated {formatRelativeTime(train.livePosition!.lastUpdated)}
+                         </div>
+                       </>
+                     )}
+                     {!isLive && (
+                       <div className="text-[10px] text-neutral-400 pt-1 border-t border-neutral-200">
+                         Scheduled position
+                       </div>
+                     )}
+                   </div>
+                 </div>
+               </Popup>
+             </Marker>
+           );
+         })}
       </MapContainer>
       {mapInstance && (
         <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-2 sm:p-3 md:p-4 gap-2 sm:gap-3">

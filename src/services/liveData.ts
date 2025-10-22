@@ -15,9 +15,6 @@ export const SOCKET_OPTIONS = {
   withCredentials: false,
   autoConnect: true,
   upgrade: false,
-  // query: {
-  //   EIO: '3'
-  // }
 } as const;
 
 const parseBoolean = (value?: string): boolean => value?.toLowerCase() === 'true';

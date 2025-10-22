@@ -24,7 +24,7 @@ import {
   findMatchingTrainId,
   updateTrainWithDelta,
 } from "@/services/liveData";
-import { isPassengerTrain } from "@/lib/train";
+import { isPassengerTrain, getTrainUniqueKey } from "@/lib/train";
 
 const initialTrains: TrainWithRoute[] = [];
 const initialStationLookup = new Map<number, StationDetails>();
@@ -34,20 +34,20 @@ export interface TrainStoreState {
   stationLookup: Map<number, StationDetails>;
   isDatasetHydrated: boolean;
   filters: TrainFilters;
-  selectedTrainId?: number;
+  selectedTrainId?: string;
   liveDeltas: Map<string, LiveTrainDelta>;
   trainKeyToId: Map<string, number>;
-  selectedRunIds: Map<number, string>;
+  selectedRunIds: Map<string, string>;
   unresolvedDeltas: Map<string, LiveTrainDelta>;
   connectionStatus: ConnectionStatus;
   lastSocketEvent?: number;
   lastError?: string;
   setFilters: (partial: Partial<TrainFilters>) => void;
-  selectTrain: (trainId: number) => void;
+  selectTrain: (trainId: string) => void;
   applyDeltas: (deltas: LiveTrainDelta[]) => void;
   setConnectionStatus: (status: ConnectionStatus) => void;
   setLastError: (message?: string) => void;
-  selectTrainRun: (trainId: number, runId: string) => void;
+  selectTrainRun: (trainId: string, runId: string) => void;
   setDataset: (dataset: {
     trains: TrainWithRoute[];
     stationById: Map<number, StationDetails>;
@@ -75,7 +75,7 @@ const processDeltas = (
     trains: TrainWithRoute[];
     liveDeltas: Map<string, LiveTrainDelta>;
     trainKeyToId: Map<string, number>;
-    selectedRunIds: Map<number, string>;
+    selectedRunIds: Map<string, string>;
     unresolvedDeltas: Map<string, LiveTrainDelta>;
   },
   deltas: LiveTrainDelta[]
@@ -112,7 +112,7 @@ const processDeltas = (
           ? updateTrainWithDelta(
               train,
               delta,
-              selectedRunIds.get(train.TrainId)
+              selectedRunIds.get(getTrainUniqueKey(train))
             )
           : train
       );
@@ -121,7 +121,7 @@ const processDeltas = (
         (train) => train.TrainId === targetTrainId
       );
       if (updatedTrain?.selectedRunId) {
-        selectedRunIds.set(targetTrainId, updatedTrain.selectedRunId);
+        selectedRunIds.set(getTrainUniqueKey(updatedTrain), updatedTrain.selectedRunId);
       }
       unresolvedDeltas.delete(delta.id);
     } else {
@@ -142,7 +142,7 @@ const pruneStaleData = (
   currentState: {
     trains: TrainWithRoute[];
     liveDeltas: Map<string, LiveTrainDelta>;
-    selectedRunIds: Map<number, string>;
+    selectedRunIds: Map<string, string>;
   },
   now: number
 ) => {
@@ -161,7 +161,7 @@ const pruneStaleData = (
     trains = sanitizedTrains;
     sanitizedTrains.forEach((train) => {
       if (!train.selectedRunId) {
-        selectedRunIds.delete(train.TrainId);
+        selectedRunIds.delete(getTrainUniqueKey(train));
       }
     });
   }
@@ -259,11 +259,11 @@ const useTrainStore = create<TrainStoreState>()(
     selectTrainRun: (trainId, runId) =>
       set((state) => {
         const trains = state.trains.map((train) =>
-          train.TrainId === trainId
+          getTrainUniqueKey(train) === trainId
             ? applyRunSelectionToTrain(train, runId)
             : train
         );
-        const targetTrain = trains.find((train) => train.TrainId === trainId);
+        const targetTrain = trains.find((train) => getTrainUniqueKey(train) === trainId);
         const selectedRunIds = new Map(state.selectedRunIds);
         if (targetTrain?.selectedRunId) {
           selectedRunIds.set(trainId, targetTrain.selectedRunId);
@@ -285,7 +285,7 @@ export const useSelectedTrain = () =>
   useTrainStore(
     (state) => ({
       selectedTrain: state.trains.find(
-        (train) => train.TrainId === state.selectedTrainId
+        (train) => getTrainUniqueKey(train) === state.selectedTrainId
       ),
       selectTrain: state.selectTrain,
       selectTrainRun: state.selectTrainRun,
@@ -438,3 +438,13 @@ export const useSocketMeta = () =>
     }),
     shallow
   );
+
+export const useRelatedTrains = (selectedTrain?: TrainWithRoute) => {
+  return useTrainStore((state) => {
+    if (!selectedTrain) return [];
+    return state.trains.filter((train) =>
+      train.TrainId === selectedTrain.TrainId &&
+      getTrainUniqueKey(train) !== getTrainUniqueKey(selectedTrain)
+    );
+  }, shallow);
+};

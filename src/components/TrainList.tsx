@@ -1,11 +1,12 @@
 import type { TrainWithRoute } from '@/types';
 import { formatLateBy, formatRelativeTime, formatSpeed } from '@/utils/time';
 import { StatusChip } from './StatusChip';
+import { getTrainUniqueKey } from '@/lib/train';
 
 interface TrainListProps {
   trains: TrainWithRoute[];
-  selectedTrainId?: number;
-  onSelect: (trainId: number) => void;
+  selectedTrainId?: string;
+  onSelect: (trainId: string) => void;
 }
 
 export const TrainList = ({ trains, selectedTrainId, onSelect }: TrainListProps) => {
@@ -28,14 +29,15 @@ export const TrainList = ({ trains, selectedTrainId, onSelect }: TrainListProps)
       {/* Train List */}
       <div className="flex-1 overflow-y-auto">
         {trains.map((train) => {
-          const isSelected = train.TrainId === selectedTrainId;
-          const live = train.livePosition;
+           const uniqueKey = getTrainUniqueKey(train);
+           const isSelected = uniqueKey === selectedTrainId;
+           const live = train.livePosition;
 
-          return (
-            <button
-              key={train.TrainId}
-              type="button"
-              onClick={() => onSelect(train.TrainId)}
+           return (
+             <button
+               key={uniqueKey}
+               type="button"
+               onClick={() => onSelect(uniqueKey)}
               className={`group relative w-full border-b border-[#f0e4d4] px-5 py-3 text-left transition-all hover:bg-[#f3efe6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#cde5db] ${
                 isSelected ? 'bg-[#f3efe6] shadow-inner ring-1 ring-[#b9e0d0]' : ''
               }`}

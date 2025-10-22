@@ -1,4 +1,6 @@
 import { StationDetails, TrainStop, TrainWithRoute } from "@/types";
+import { getTrainUniqueKey } from "@/lib/train";
+import { useRelatedTrains } from "@/hooks/useTrainData";
 import {
   formatLateBy,
   formatRelativeTime,
@@ -16,7 +18,9 @@ import { StatusChip } from "./StatusChip";
 interface TrainDetailsProps {
   train?: TrainWithRoute;
   stationLookup: Map<number, StationDetails>;
-  onSelectRun?: (trainId: number, runId: string) => void;
+  onSelectRun?: (trainId: string, runId: string) => void;
+  showRelatedTrains?: boolean;
+  onToggleRelatedTrains?: () => void;
 }
 
 interface InfoCardProps {
@@ -189,9 +193,12 @@ export const TrainDetails = ({
   train,
   stationLookup,
   onSelectRun,
+  showRelatedTrains = false,
+  onToggleRelatedTrains,
 }: TrainDetailsProps) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const stopRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const relatedTrains = useRelatedTrains(train);
 
   // Effect to scroll the active station into view
   useEffect(() => {
@@ -377,6 +384,33 @@ export const TrainDetails = ({
         </div>
       </header>
 
+      {/* Related Trains Toggle */}
+      {relatedTrains.length > 0 && (
+        <section className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-amber-50 p-4 shadow-[0_22px_40px_-34px_rgba(95,75,60,0.45)] lg:p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-amber-900">
+                Related Train Instances
+              </h3>
+              <p className="text-xs text-amber-700">
+                Show locations of other instances of this train on different dates
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onToggleRelatedTrains}
+              className={`rounded-xl border-2 px-4 py-2 text-sm font-semibold transition-all ${
+                showRelatedTrains
+                  ? "border-amber-500 bg-amber-500 text-white shadow-lg"
+                  : "border-amber-300 bg-white text-amber-700 hover:bg-amber-50"
+              }`}
+            >
+              {showRelatedTrains ? "Hide Related" : "Show Related"}
+            </button>
+          </div>
+        </section>
+      )}
+
       {/* Multiple Runs Selector */}
       {train.liveRuns && train.liveRuns.length > 1 && onSelectRun && (
         <section className="rounded-2xl border-l-4 border-[#c27a2f] bg-gradient-to-r from-[#fbead3] via-[#fff3e0] to-white p-4 shadow-[0_22px_40px_-34px_rgba(95,75,60,0.45)] lg:p-5">
@@ -411,7 +445,7 @@ export const TrainDetails = ({
               <button
                 key={run.id}
                 type="button"
-                onClick={() => onSelectRun(train.TrainId, run.id)}
+                onClick={() => onSelectRun(getTrainUniqueKey(train), run.id)}
                 className={`rounded-xl border-2 px-3 py-2 text-left text-[10px] transition-all duration-200 lg:px-4 lg:py-2.5 lg:text-xs ${
                   run.id === train.selectedRunId
                     ? "border-[#2c7f68] bg-gradient-to-br from-[#e7f6ef] to-white text-[#2c7f68] ring-2 ring-[#b9e0d0] shadow-[0_18px_30px_-22px_rgba(44,127,104,0.35)] scale-105"
@@ -420,7 +454,11 @@ export const TrainDetails = ({
               >
                 <div className="text-xs font-bold text-[color:var(--ink-strong)] lg:text-sm">
                   {run.dayNumber != null
-                    ? `Day ${run.dayNumber}`
+                    ? run.dayNumber === 0
+                      ? "Today"
+                      : run.dayNumber === 1
+                      ? "Yesterday"
+                      : `Day ${run.dayNumber}`
                     : "Unknown Day"}
                 </div>
                 <div className="mt-1 flex items-center gap-1 text-[color:var(--ink-muted)]/80">

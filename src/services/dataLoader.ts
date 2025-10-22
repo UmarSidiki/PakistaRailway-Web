@@ -10,6 +10,7 @@ import type {
 } from '@/types';
 import { db } from './db';
 import { findMatchingTrainId, updateTrainWithDelta } from './liveData';
+import { getTrainUniqueKey } from '@/lib/train';
 
 export interface TrainDataset {
   trains: TrainWithRoute[];
@@ -99,7 +100,7 @@ const applyStoredLiveDeltas = async (staticTrains: TrainWithRoute[]): Promise<Tr
   // Create a map for efficient delta lookups
   const deltaMap = new Map(deltas.map(d => [d.id, d]));
   const trainKeyToId = new Map<string, number>();
-  const selectedRunIds = new Map<number, string>();
+  const selectedRunIds = new Map<string, string>();
 
   let updatedTrains = staticTrains;
 
@@ -110,12 +111,12 @@ const applyStoredLiveDeltas = async (staticTrains: TrainWithRoute[]): Promise<Tr
       trainKeyToId.set(delta.trainKey, targetTrainId);
       updatedTrains = updatedTrains.map(train =>
         train.TrainId === targetTrainId
-          ? updateTrainWithDelta(train, delta, selectedRunIds.get(train.TrainId))
+          ? updateTrainWithDelta(train, delta, selectedRunIds.get(getTrainUniqueKey(train)))
           : train
       );
       const updatedTrain = updatedTrains.find(t => t.TrainId === targetTrainId);
       if (updatedTrain?.selectedRunId) {
-        selectedRunIds.set(targetTrainId, updatedTrain.selectedRunId);
+        selectedRunIds.set(getTrainUniqueKey(updatedTrain), updatedTrain.selectedRunId);
       }
     }
   });

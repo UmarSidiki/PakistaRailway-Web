@@ -12,9 +12,11 @@ import {
   useLiveSocket,
   useDatasetBootstrap,
   useStationLookup,
+  useRelatedTrains,
 } from "@/hooks/useTrainData";
 import type { ConnectionStatus } from "@/types";
 import { Analytics } from "@vercel/analytics/react";
+import { getTrainUniqueKey } from "@/lib/train";
 
 const App = () => {
   useDatasetBootstrap();
@@ -22,6 +24,7 @@ const App = () => {
   const [activeTab, setActiveTab] = useState<
     "search" | "details" | "stationUpdates" | "stationSchedule"
   >("search");
+  const [showRelatedTrains, setShowRelatedTrains] = useState(true);
 
   const {
     allTrains,
@@ -38,6 +41,7 @@ const App = () => {
     unresolvedCount,
   } = useDashboardData();
   const stationLookup = useStationLookup();
+  const relatedTrains = useRelatedTrains(selectedTrain);
 
   const statusLabel: Record<ConnectionStatus, string> = {
     connected: "Connected",
@@ -47,7 +51,7 @@ const App = () => {
     error: "Error",
   };
 
-  const handleTrainSelect = (trainId: number) => {
+  const handleTrainSelect = (trainId: string) => {
     selectTrain(trainId);
     setActiveTab("details");
   };
@@ -197,7 +201,7 @@ const App = () => {
 
               <TrainList
                 trains={trains}
-                selectedTrainId={selectedTrain?.TrainId}
+                selectedTrainId={selectedTrain ? getTrainUniqueKey(selectedTrain) : undefined}
                 onSelect={handleTrainSelect}
               />
             </div>
@@ -208,11 +212,14 @@ const App = () => {
               trains={trains}
               selectedTrain={selectedTrain}
               stationLookup={stationLookup}
+              relatedTrains={showRelatedTrains ? relatedTrains : []}
             />
             <TrainDetails
               train={selectedTrain}
               stationLookup={stationLookup}
               onSelectRun={selectTrainRun}
+              showRelatedTrains={showRelatedTrains}
+              onToggleRelatedTrains={() => setShowRelatedTrains(!showRelatedTrains)}
             />
           </section>
         ) : activeTab === "stationUpdates" ? (
