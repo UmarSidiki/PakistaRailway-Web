@@ -466,24 +466,38 @@ export const MapView = ({
           livePosition={selectedTrain?.livePosition ?? null}
         />
 
-        {routeStations.map((station) => {
-          // Calculate distance and expected arrival if train is live
-          let distanceKm: number | null = null;
-          let expectedArrival: ReturnType<typeof calculateExpectedArrival> =
-            null;
-
-          if (selectedLiveTrain?.livePosition) {
-            distanceKm = calculateDistance(
-              selectedLiveTrain.livePosition.lat,
-              selectedLiveTrain.livePosition.lon,
-              station.lat,
-              station.lon
+        {routeStations.map((station, idx) => {
+          // Determine if this station is passed
+          let isPassed = false;
+          let passedAgo: string | null = null;
+          if (selectedTrain && selectedTrain.livePosition) {
+            const prevStationId = selectedTrain.livePosition.prevStationId;
+            const prevIdx = selectedTrain.route.findIndex(
+              (s) => s.StationId === prevStationId
             );
-
-            expectedArrival = calculateExpectedArrival(
-              distanceKm,
-              selectedLiveTrain.livePosition.speed
-            );
+            if (prevIdx !== -1 && idx <= prevIdx) {
+              isPassed = true;
+              // Try to get the time the train passed this station
+              const stop = selectedTrain.route[idx];
+              if (stop && stop.DepartureTime) {
+                // Estimate "minutes ago" using DepartureTime and current time
+                // DepartureTime is in "HH:MM", so parse and compare to now
+                const now = new Date();
+                const [h, m] = stop.DepartureTime.split(":").map(Number);
+                const passedDate = new Date(now);
+                passedDate.setHours(h, m, 0, 0);
+                // If passedDate is in the future, subtract a day
+                if (passedDate > now) passedDate.setDate(passedDate.getDate() - 1);
+                const diffMs = now.getTime() - passedDate.getTime();
+                const diffMin = Math.round(diffMs / 60000);
+                if (diffMin >= 60) {
+                  const diffHr = Math.round(diffMin / 60);
+                  passedAgo = `${diffHr} hour${diffHr !== 1 ? "s" : ""} ago`;
+                } else {
+                  passedAgo = diffMin > 0 ? `${diffMin} min ago` : "just now";
+                }
+              }
+            }
           }
 
           return (
@@ -506,50 +520,80 @@ export const MapView = ({
                       Station
                     </div>
                   </div>
-
-                  {selectedLiveTrain?.livePosition && distanceKm !== null && (
-                    <div className="pt-2 border-t border-neutral-200 space-y-1">
-                      <div className="text-[10px] font-semibold text-neutral-600 uppercase tracking-wide">
-                        From Current Position
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-neutral-500">Distance:</span>
-                        <span className="font-semibold text-emerald-700">
-                          {formatDistance(distanceKm)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-neutral-500">Current Speed:</span>
-                        <span className="font-semibold">
-                          {formatSpeed(selectedLiveTrain.livePosition.speed)}
-                        </span>
-                      </div>
-                      {expectedArrival && (
-                        <>
-                          <div className="flex justify-between items-center">
-                            <span className="text-neutral-500">
-                              Est. Arrival:
-                            </span>
-                            <span className="font-semibold text-emerald-600">
-                              {expectedArrival.timeString}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-neutral-500">In About:</span>
-                            <span className="font-semibold text-emerald-600">
-                              {expectedArrival.durationLabel}
-                            </span>
-                          </div>
-                        </>
-                      )}
-                      {!expectedArrival &&
-                        selectedLiveTrain.livePosition.speed &&
-                        selectedLiveTrain.livePosition.speed < 5 && (
-                          <div className="text-[10px] text-amber-600 italic">
-                            Train moving too slow for estimate
-                          </div>
-                        )}
+                  {isPassed ? (
+                    <div className="pt-2 border-t border-neutral-200 text-amber-700 font-semibold">
+                      Passed: {passedAgo ?? "—"}
                     </div>
+                  ) : (
+                    selectedLiveTrain?.livePosition && (
+                      <div className="pt-2 border-t border-neutral-200 space-y-1">
+                        <div className="text-[10px] font-semibold text-neutral-600 uppercase tracking-wide">
+                          From Current Position
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-neutral-500">Distance:</span>
+                          <span className="font-semibold text-emerald-700">
+                            {formatDistance(
+                              calculateDistance(
+                                selectedLiveTrain.livePosition.lat,
+                                selectedLiveTrain.livePosition.lon,
+                                station.lat,
+                                station.lon
+                              )
+                            )}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-neutral-500">Current Speed:</span>
+                          <span className="font-semibold">
+                            {formatSpeed(selectedLiveTrain.livePosition.speed)}
+                          </span>
+                        </div>
+                        {(() => {
+                          const distanceKm = calculateDistance(
+                            selectedLiveTrain.livePosition.lat,
+                            selectedLiveTrain.livePosition.lon,
+                            station.lat,
+                            station.lon
+                          );
+                          const expectedArrival = calculateExpectedArrival(
+                            distanceKm,
+                            selectedLiveTrain.livePosition.speed
+                          );
+                          if (expectedArrival) {
+                            return (
+                              <>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-neutral-500">
+                                    Est. Arrival:
+                                  </span>
+                                  <span className="font-semibold text-emerald-600">
+                                    {expectedArrival.timeString}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-neutral-500">In About:</span>
+                                  <span className="font-semibold text-emerald-600">
+                                    {expectedArrival.durationLabel}
+                                  </span>
+                                </div>
+                              </>
+                            );
+                          }
+                          if (
+                            selectedLiveTrain.livePosition.speed &&
+                            selectedLiveTrain.livePosition.speed < 5
+                          ) {
+                            return (
+                              <div className="text-[10px] text-amber-600 italic">
+                                Train moving too slow for estimate
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </div>
+                    )
                   )}
                 </div>
               </Popup>
