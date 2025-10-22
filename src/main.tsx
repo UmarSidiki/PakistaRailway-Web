@@ -7,6 +7,7 @@ import { db } from "./services/db";
 import "./index.css";
 import "leaflet/dist/leaflet.css";
 import Dexie from "dexie";
+import { connectLiveSocket } from "./services/socket";
 
 // Type for database status
 type DbStatus = "checking" | "available" | "unavailable" | "migrating";
@@ -17,6 +18,7 @@ const Main = () => {
   const [hasCachedData, setHasCachedData] = useState(false);
   const [isFirstVisit, setIsFirstVisit] = useState(true);
   const [dbStatus, setDbStatus] = useState<DbStatus>("checking");
+  const [liveAvailable, setLiveAvailable] = useState<boolean | null>(null);
 
   useEffect(() => {
     // Check if IndexedDB is available
@@ -141,40 +143,48 @@ const Main = () => {
     setIndexedDbAvailable(hasIndexedDB);
     setIsFirstVisit(firstVisit);
 
-    // Run all checks in parallel
+    // Define socket connectivity check function
+    const checkSocketConnectivity = () =>
+      new Promise<boolean>((resolve) => {
+        let cleanup = () => {};
+        const timer = setTimeout(() => {
+          try { cleanup(); } catch {}
+          resolve(false);
+        }, 3000);
+        cleanup = connectLiveSocket(
+          () => {},
+          {
+            onConnect: () => {
+              clearTimeout(timer);
+              try { cleanup(); } catch {}
+              resolve(true);
+            },
+            onError: () => {
+              clearTimeout(timer);
+              try { cleanup(); } catch {}
+              resolve(false);
+            },
+          }
+        );
+      });
+
+    // Run database and service worker checks in parallel, then check socket
     Promise.all([checkDatabase(), checkServiceWorkerCache()]).then(
-      ([dbHasData, swHasData]) => {
-        // Use the most optimistic result
+      async ([dbHasData, swHasData]) => {
         const hasData = dbHasData || swHasData;
 
-        // Calculate loading time based on multiple factors
-        let loadingTime;
+        // Simplified loading time calculation
+        const baseLoadingTime = hasData ? 800 : firstVisit ? (hasIndexedDB ? 2000 : 3500) : (hasIndexedDB ? 1200 : 2000);
+        const loadingTime = baseLoadingTime + (dbStatus === "migrating" ? 1000 : 0) + Math.random() * 300;
 
-        if (hasData) {
-          // Fast loading if we have cached data
-          loadingTime = 800;
-        } else if (firstVisit) {
-          // Longer loading for first visit
-          loadingTime = hasIndexedDB ? 2000 : 3500;
-        } else {
-          // Medium loading for return visits without cache
-          loadingTime = hasIndexedDB ? 1200 : 2000;
-        }
+        // Check socket connectivity in parallel with loading timer
+        const socketPromise = checkSocketConnectivity();
+        const loadingPromise = new Promise<void>((resolve) => setTimeout(resolve, loadingTime));
 
-        // Add extra time if database is migrating
-        if (dbStatus === "migrating") {
-          loadingTime += 1000;
-        }
+        const [socketAvailable] = await Promise.all([socketPromise, loadingPromise]);
+        setLiveAvailable(socketAvailable);
 
-        // Add small random variation
-        loadingTime += Math.random() * 300;
-
-        // Simulate loading time
-        const timer = setTimeout(() => {
-          setIsLoading(false);
-        }, loadingTime);
-
-        return () => clearTimeout(timer);
+        setIsLoading(false);
       }
     );
   }, [dbStatus]);
@@ -188,6 +198,7 @@ const Main = () => {
           hasCachedData={hasCachedData}
           isFirstVisit={isFirstVisit}
           dbStatus={dbStatus}
+          liveAvailable={liveAvailable}
         />
       )}
       <div

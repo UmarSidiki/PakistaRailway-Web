@@ -8,20 +8,23 @@ interface LoadingScreenProps {
   hasCachedData?: boolean;
   isFirstVisit?: boolean;
   dbStatus?: 'checking' | 'available' | 'unavailable' | 'migrating';
+  liveAvailable?: boolean | null;
 }
 
-export const LoadingScreen = ({ 
-  onComplete, 
+export const LoadingScreen = ({
+  onComplete,
   indexedDbAvailable = false,
   hasCachedData = false,
   isFirstVisit = true,
-  dbStatus = 'checking'
+  dbStatus = 'checking',
+  liveAvailable = null
 }: LoadingScreenProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
   const progressBarRef = useRef<HTMLDivElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
   const dbStatusRef = useRef<HTMLDivElement>(null);
+  const offlineButtonRef = useRef<HTMLButtonElement>(null);
   const [displayedDbStatus, setDisplayedDbStatus] = useState(dbStatus);
 
   // Update displayed status with a delay to make transitions smoother
@@ -98,7 +101,7 @@ export const LoadingScreen = ({
       opacity: 0,
       duration: 0.8,
       ease: 'power2.inOut',
-      onComplete
+      onComplete: liveAvailable === false ? undefined : onComplete
     });
 
     return () => {
@@ -153,31 +156,31 @@ export const LoadingScreen = ({
   };
 
   return (
-    <div 
+    <div
       ref={containerRef}
       className="fixed inset-0 z-50 flex items-center justify-center bg-[#fffcf7]"
     >
       <div className="text-center">
         <div ref={textRef} className="mb-8">
-          <h1 className="text-4xl font-bold text-[#5f4b3c] mb-2">Train Tracker</h1>
+          <h1 className="text-4xl font-bold text-[#5f4b3c] mb-2">Pak Rail Live</h1>
           <p className="text-[#8b7467]">Loading real-time data...</p>
         </div>
-        
+
         <div ref={statusRef} className="mb-4 text-sm text-[#8b7467]">
           {getStatusMessage()}
         </div>
-        
+
         <div ref={dbStatusRef} className={`mb-6 text-xs ${getDbStatusColor()}`}>
           {getDbStatusMessage()}
         </div>
-        
+
         <div className="relative h-1 w-64 overflow-hidden rounded-full bg-[#e8dcc6]">
-          <div 
+          <div
             ref={progressBarRef}
             className="absolute h-full w-full bg-gradient-to-r from-[#d4a574] to-[#b08968]"
           />
         </div>
-        
+
         <div className="mt-8 flex justify-center space-x-2">
           {[0, 1, 2].map((i) => (
             <div
@@ -187,6 +190,18 @@ export const LoadingScreen = ({
             />
           ))}
         </div>
+
+        {liveAvailable === false && (
+          <div className="mt-8">
+            <button
+              ref={offlineButtonRef}
+              onClick={onComplete}
+              className="px-6 py-3 bg-[#d4a574] text-white rounded-lg hover:bg-[#b08968] transition-colors duration-200 font-medium"
+            >
+              Trains are offline, continue to use offline mode
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
