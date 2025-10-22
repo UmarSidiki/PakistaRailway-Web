@@ -27,7 +27,7 @@ export interface TrackData {
  * @returns Track data object (with stations) or throws on error
  */
 export async function fetchTrackData(trainId: number): Promise<TrackData> {
-  const url = `https://pak.booked.qzz.io/api/tracks/${trainId}`;
+  const url = `${process.env.VITE_PUBLIC_SOCKET_URL}/api/tracks/${trainId}`;
   try {
     const res = await fetch(url);
     if (!res.ok) {

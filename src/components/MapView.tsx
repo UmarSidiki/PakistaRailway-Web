@@ -16,7 +16,6 @@ import type {
 import L from "leaflet";
 import type { TrainWithRoute } from "@/types";
 import { getTrainUniqueKey } from "@/lib/train";
-import { db } from "@/services/db";
 import { TrackPolyline } from "./TrackPolyline";
 import { getCachedTrack, setCachedTrack } from "@/services/trackCache";
 import { fetchTrackData } from "@/services/trackApi";
