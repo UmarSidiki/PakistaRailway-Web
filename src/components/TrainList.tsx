@@ -46,7 +46,7 @@ export const TrainList = ({ trains, selectedTrainId, onSelect }: TrainListProps)
                   <h3 className={`truncate text-sm font-bold ${isSelected ? 'text-[#2c7f68]' : 'text-[color:var(--ink-strong)]'} group-hover:text-[#2c7f68]`}>
                     {train.TrainName}
                   </h3>
-                  <p className="truncate text-xs text-[color:var(--ink-muted)]/70">{train.TrainDescription || 'No description'}</p>
+                  <p className="truncate text-xs text-neutral-400">{train.TrainDescription || 'No description'}</p>
                 </div>
                 {live && <StatusChip variant="live" label="Live" />}
               </div>
